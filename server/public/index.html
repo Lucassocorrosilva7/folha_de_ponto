@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Folha de Ponto</title>
+    <style>
+        form {
+            display: flex;
+            flex-direction: column;
+            width: 300px;
+            margin: 0 auto;
+        }
+
+        label,
+        input,
+        button {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Folha de Ponto</h1>
+
+    <form id="timesheet-form">
+        <label for="day">Dia da Semana:</label>
+        <select id="day" name="day" required>
+            <option value="Segunda-feira">Segunda-feira</option>
+            <option value="Terça-feira">Terça-feira</option>
+            <option value="Quarta-feira">Quarta-feira</option>
+            <option value="Quinta-feira">Quinta-feira</option>
+            <option value="Sexta-feira">Sexta-feira</option>
+        </select>
+        <label for="date">Data:</label>
+        <input type="date" id="date" name="date" required>
+        <label for="entryTime">Horário de Entrada:</label>
+        <input type="time" id="entryTime" name="entryTime" required>
+        <label for="exitTime">Horário de Saída:</label>
+        <input type="time" id="exitTime" name="exitTime" required>
+        <button type="submit">Salvar</button>
+    </form>
+
+    <p><a href="records.html">Ver Registros</a></p>
+
+    <script>
+        async function saveRecord(e) {
+            e.preventDefault();
+            const form = e.target;
+            const record = {
+                day: form.day.value,
+                date: form.date.value,
+                entryTime: form.entryTime.value,
+                exitTime: form.exitTime.value
+            };
+            const hoursWorked = (new Date(`1970-01-01T${record.exitTime}Z`) - new Date(`1970-01-01T${record.entryTime}Z`)) / 1000 / 60 / 60;
+            record.hoursWorked = hoursWorked;
+
+            await fetch('http://localhost:3000/timesheet', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(record)
+            });
+
+            form.reset();
+        }
+
+        document.getElementById('timesheet-form').addEventListener('submit', saveRecord);
+    </script>
+</body>
+
+</html>

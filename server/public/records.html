@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registros de Folha de Ponto</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .total-row {
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Registros de Folha de Ponto</h1>
+
+    <div id="edit-form-container" class="hidden">
+        <form id="timesheet-form">
+            <input type="hidden" id="record-id" name="record-id">
+            <label for="day">Dia da Semana:</label>
+            <select id="day" name="day" disabled>
+                <option value="Segunda-feira">Segunda-feira</option>
+                <option value="Terça-feira">Terça-feira</option>
+                <option value="Quarta-feira">Quarta-feira</option>
+                <option value="Quinta-feira">Quinta-feira</option>
+                <option value="Sexta-feira">Sexta-feira</option>
+            </select>
+            <label for="date">Data:</label>
+            <input type="date" id="date" name="date" disabled required>
+            <label for="entryTime">Horário de Entrada:</label>
+            <input type="time" id="entryTime" name="entryTime" disabled required>
+            <label for="exitTime">Horário de Saída:</label>
+            <input type="time" id="exitTime" name="exitTime" disabled required>
+            <button type="submit">Salvar</button>
+            <button type="button" id="cancel-edit" class="hidden">Cancelar Edição</button>
+        </form>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Dia</th>
+                <th>Data</th>
+                <th>Horário de Entrada</th>
+                <th>Horário de Saída</th>
+                <th>Horas Trabalhadas</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody id="timesheet">
+            <!-- Rows will be populated by JavaScript -->
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td colspan="4">Total de Horas Trabalhadas:</td>
+                <td id="total-hours">0.00</td>
+                <td></td>
+            </tr>
+            <tr class="total-row">
+                <td colspan="4">Valor Total:</td>
+                <td id="total-value">0.00</td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <p><a href="index.html">Voltar para o Formulário</a></p>
+
+    <script>
+        const hourlyRate = 7.7; // Tarifa por hora
+
+        async function fetchTimesheet() {
+            const response = await fetch('http://localhost:3000/timesheet');
+            const data = await response.json();
+            return data.data;
+        }
+
+        async function addOrUpdateTimesheet(record) {
+            const method = record._id ? 'PUT' : 'POST';
+            const url = record._id ? `http://localhost:3000/timesheet/${record._id}` : 'http://localhost:3000/timesheet';
+
+            await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(record)
+            });
+        }
+
+        async function deleteTimesheet(id) {
+            await fetch(`http://localhost:3000/timesheet/${id}`, {
+                method: 'DELETE'
+            });
+        }
+
+        function createRow(record) {
+            return `
+                <tr data-id="${record._id}">
+                    <td>${record.day}</td>
+                    <td>${record.date ? new Date(record.date).toISOString().substr(0, 10) : ''}</td>
+                    <td>${record.entryTime}</td>
+                    <td>${record.exitTime}</td>
+                    <td class="hours-worked">${record.hoursWorked.toFixed(2)}</td>
+                    <td>
+                        <button onclick="editRecord('${record._id}')">Editar</button>
+                        <button onclick="removeRecord('${record._id}')">Excluir</button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        async function loadTimesheet() {
+            const timesheet = await fetchTimesheet();
+            const tbody = document.getElementById('timesheet');
+            const totalHoursElem = document.getElementById('total-hours');
+            const totalValueElem = document.getElementById('total-value');
+            tbody.innerHTML = '';
+            let totalHours = 0;
+            let totalValue = 0;
+
+            timesheet.forEach(record => {
+                tbody.innerHTML += createRow(record);
+                totalHours += record.hoursWorked;
+                totalValue += record.hoursWorked * hourlyRate;
+            });
+
+            totalHoursElem.textContent = totalHours.toFixed(2);
+            totalValueElem.textContent = totalValue.toFixed(2);
+        }
+
+        async function saveRecord(e) {
+            e.preventDefault();
+            const form = e.target;
+            const record = {
+                _id: form['record-id'].value,
+                day: form.day.value,
+                date: form.date.value,
+                entryTime: form.entryTime.value,
+                exitTime: form.exitTime.value
+            };
+            const hoursWorked = (new Date(`1970-01-01T${record.exitTime}Z`) - new Date(`1970-01-01T${record.entryTime}Z`)) / 1000 / 60 / 60;
+            record.hoursWorked = hoursWorked;
+
+            await addOrUpdateTimesheet(record);
+            await loadTimesheet();
+            form.reset();
+            document.getElementById('edit-form-container').classList.add('hidden');
+        }
+
+        function editRecord(id) {
+            const row = document.querySelector(`tr[data-id='${id}']`);
+            document.getElementById('record-id').value = id;
+            document.getElementById('day').value = row.cells[0].textContent;
+            document.getElementById('date').value = row.cells[1].textContent;
+            document.getElementById('entryTime').value = row.cells[2].textContent;
+            document.getElementById('exitTime').value = row.cells[3].textContent;
+            document.getElementById('edit-form-container').classList.remove('hidden');
+            document.getElementById('day').disabled = false;
+            document.getElementById('date').disabled = false;
+            document.getElementById('entryTime').disabled = false;
+            document.getElementById('exitTime').disabled = false;
+            document.getElementById('cancel-edit').classList.remove('hidden');
+        }
+
+        async function removeRecord(id) {
+            if (confirm('Tem certeza que deseja excluir este registro?')) {
+                await deleteTimesheet(id);
+                await loadTimesheet();
+            }
+        }
+
+        document.getElementById('timesheet-form').addEventListener('submit', saveRecord);
+        document.getElementById('cancel-edit').addEventListener('click', () => {
+            document.getElementById('timesheet-form').reset();
+            document.getElementById('edit-form-container').classList.add('hidden');
+            document.getElementById('day').disabled = true;
+            document.getElementById('date').disabled = true;
+            document.getElementById('entryTime').disabled = true;
+            document.getElementById('exitTime').disabled = true;
+            document.getElementById('cancel-edit').classList.add('hidden');
+        });
+
+        window.onload = loadTimesheet;
+    </script>
+</body>
+
+</html>
